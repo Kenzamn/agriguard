@@ -1,0 +1,241 @@
+{% extends 'gateway/base.html' %}
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block content %}
+<style>
+  .welcome-bar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .welcome-text h2 { font-size: 18px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .welcome-text p  { font-size: 13px; color: var(--text2); }
+  .welcome-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  @media (max-width: 600px) { .welcome-bar { flex-direction: column; align-items: flex-start; } }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+  .field-health-bar {
+    height: 8px; border-radius: 4px;
+    background: var(--surface3);
+    overflow: hidden;
+    display: flex; gap: 2px;
+    margin-top: 16px;
+  }
+  .fhb-seg { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+
+  .activity-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+  .activity-content { flex: 1; }
+  .activity-title { font-size: 13px; color: var(--text); font-weight: 500; }
+  .activity-time  { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  .quick-action {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; padding: 20px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    text-decoration: none;
+    color: var(--text2);
+    font-size: 12px; font-weight: 500;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .quick-action:hover { border-color: var(--green-ring); color: var(--green); background: var(--green-bg); }
+  .quick-action svg { width: 22px; height: 22px; }
+  .quick-actions-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-top: 16px; }
+  @media (max-width: 600px) { .quick-actions-grid { grid-template-columns: repeat(2,1fr); } }
+</style>
+
+<div class="welcome-bar">
+  <div class="welcome-text">
+    <h2 id="welcome-msg">Good morning</h2>
+    <p id="welcome-date">Loading…</p>
+  </div>
+  <div class="welcome-actions">
+    <a href="/fields/" class="btn btn-ghost btn-sm">Add field</a>
+    <a href="/diagnosis/" class="btn btn-primary btn-sm">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      New diagnosis
+    </a>
+  </div>
+</div>
+
+<!-- Stat cards -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon icon-green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    </div>
+    <div class="stat-label">Total Fields</div>
+    <div class="stat-value" id="s-total">—</div>
+    <div class="stat-sub" id="s-area">— ha registered</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon icon-green">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+    </div>
+    <div class="stat-label">Healthy</div>
+    <div class="stat-value" id="s-healthy">—</div>
+    <div class="stat-sub">fields in good condition</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon icon-yellow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    </div>
+    <div class="stat-label">Needs Attention</div>
+    <div class="stat-value" id="s-warn">—</div>
+    <div class="stat-sub">warning status</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon icon-red">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="stat-label">Diseased</div>
+    <div class="stat-value" id="s-disease">—</div>
+    <div class="stat-sub">require immediate action</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon icon-blue">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </div>
+    <div class="stat-label">Diagnoses</div>
+    <div class="stat-value" id="s-diag">—</div>
+    <div class="stat-sub" id="s-diag-sub">total submitted</div>
+  </div>
+</div>
+
+<!-- Quick actions -->
+<div class="card" style="margin-bottom:16px">
+  <div class="card-title">Quick actions</div>
+  <div class="quick-actions-grid">
+    <a href="/fields/" class="quick-action">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Manage fields
+    </a>
+    <a href="/diagnosis/" class="quick-action">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload photo
+    </a>
+    <a href="/weather/" class="quick-action">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
+      Check weather
+    </a>
+    <a href="/notifications/" class="quick-action">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      Notifications
+    </a>
+  </div>
+</div>
+
+<div class="two-col">
+  <!-- Field health summary -->
+  <div class="card">
+    <div class="card-title">Field health overview</div>
+    <div id="field-health-content">
+      <div style="color:var(--text2);font-size:13px">Loading…</div>
+    </div>
+  </div>
+
+  <!-- Recent activity -->
+  <div class="card">
+    <div class="card-title">Recent diagnoses</div>
+    <div id="activity-list">
+      <div style="color:var(--text2);font-size:13px">Loading…</div>
+    </div>
+    <a href="/diagnosis/" class="btn btn-ghost btn-sm" style="margin-top:12px">View all →</a>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  (function() {
+    const h = new Date().getHours();
+    const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    const user = getUser();
+    document.getElementById('welcome-msg').textContent = greet + (user.first_name ? ', ' + user.first_name : '');
+    document.getElementById('welcome-date').textContent = new Date().toLocaleDateString('en', { weekday:'long', day:'numeric', month:'long', year:'numeric' });
+  })();
+
+  async function loadDashboard() {
+    const [fr, dr] = await Promise.all([ apiFetch('/api/farms/fields/'), apiFetch('/api/diagnosis/diagnoses/') ]);
+    const fields = fr?.ok ? await fr.json() : [];
+    const diags  = dr?.ok ? await dr.json() : [];
+
+    const healthy = fields.filter(f=>f.status==='healthy').length;
+    const warn    = fields.filter(f=>f.status==='warning').length;
+    const disease = fields.filter(f=>f.status==='disease').length;
+    const totalHa = fields.reduce((a,f)=>a+parseFloat(f.area_ha||0),0).toFixed(1);
+    const completed = diags.filter(d=>d.status==='completed').length;
+
+    document.getElementById('s-total').textContent   = fields.length;
+    document.getElementById('s-area').textContent    = totalHa + ' ha registered';
+    document.getElementById('s-healthy').textContent = healthy;
+    document.getElementById('s-warn').textContent    = warn;
+    document.getElementById('s-disease').textContent = disease;
+    document.getElementById('s-diag').textContent    = diags.length;
+    document.getElementById('s-diag-sub').textContent= completed + ' completed';
+
+    const fhc = document.getElementById('field-health-content');
+    if (!fields.length) {
+      fhc.innerHTML = '<div class="empty-state"><p>No fields registered yet</p></div>';
+    } else {
+      const pct = n => fields.length ? Math.round(n/fields.length*100) : 0;
+      fhc.innerHTML = `
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span class="badge badge-green"><span class="badge-dot"></span>${healthy} Healthy (${pct(healthy)}%)</span>
+          <span class="badge badge-yellow"><span class="badge-dot"></span>${warn} Warning (${pct(warn)}%)</span>
+          <span class="badge badge-red"><span class="badge-dot"></span>${disease} Disease (${pct(disease)}%)</span>
+        </div>
+        <div class="field-health-bar">
+          <div class="fhb-seg" style="width:${pct(healthy)}%;background:var(--green)"></div>
+          <div class="fhb-seg" style="width:${pct(warn)}%;background:var(--yellow)"></div>
+          <div class="fhb-seg" style="width:${pct(disease)}%;background:var(--red)"></div>
+        </div>
+        <div style="margin-top:16px">
+          ${fields.slice(0,5).map(f=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+              <div>
+                <div style="font-size:13px;font-weight:500;color:var(--text)">${f.name}</div>
+                <div style="font-size:11px;color:var(--text3)">${f.crop_type} · ${f.area_ha} ha</div>
+              </div>
+              <span class="status status-${f.status}">${f.status}</span>
+            </div>`).join('')}
+        </div>`;
+    }
+
+    const al = document.getElementById('activity-list');
+    if (!diags.length) {
+      al.innerHTML = '<div class="empty-state"><p>No diagnoses yet</p></div>';
+    } else {
+      al.innerHTML = diags.slice(0,6).map(d => {
+        const cls = d.status === 'completed' ? 'var(--green)' : d.status === 'failed' ? 'var(--red)' : d.status === 'processing' ? 'var(--blue)' : 'var(--text3)';
+        const result = d.result ? d.result.disease_name : d.status;
+        return `<div class="activity-item">
+          <div class="activity-dot" style="background:${cls}"></div>
+          <div class="activity-content">
+            <div class="activity-title">${result}</div>
+            <div class="activity-time">${new Date(d.created_at).toLocaleString()} · <span class="status status-${d.status}" style="font-size:10px">${d.status}</span></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  loadDashboard();
+</script>
+{% endblock %}

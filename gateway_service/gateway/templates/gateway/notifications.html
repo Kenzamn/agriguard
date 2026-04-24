@@ -1,0 +1,123 @@
+{% extends 'gateway/base.html' %}
+{% block title %}Notifications{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+<style>
+  .notif-layout { display:grid; grid-template-columns:1fr 280px; gap:16px; align-items:start; }
+  @media (max-width:900px) { .notif-layout { grid-template-columns:1fr; } }
+  .notif-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+  .notif-filters { display:flex; gap:6px; flex-wrap:wrap; }
+  .nf-btn { height:30px; padding:0 12px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--border2); background:none; color:var(--text2); transition:all 0.15s; font-family:inherit; }
+  .nf-btn.active { background:var(--green-bg); border-color:var(--green-ring); color:var(--green); }
+  .notif-item { display:flex; gap:14px; align-items:flex-start; padding:14px; border-radius:10px; transition:background 0.1s; border:1px solid transparent; margin-bottom:6px; }
+  .notif-item:hover { background:var(--surface2); }
+  .notif-item.unread { background:var(--surface2); border-color:var(--border); }
+  .notif-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+  .notif-body { flex:1; min-width:0; }
+  .notif-title { font-size:13.5px; font-weight:600; color:var(--text); margin-bottom:3px; }
+  .notif-item.read .notif-title { font-weight:400; color:var(--text2); }
+  .notif-msg  { font-size:12.5px; color:var(--text2); line-height:1.5; }
+  .notif-time { font-size:11px; color:var(--text3); margin-top:4px; }
+  .notif-actions { display:flex; align-items:flex-start; gap:6px; flex-shrink:0; }
+  .unread-dot { width:8px; height:8px; border-radius:50%; background:var(--green); flex-shrink:0; margin-top:6px; }
+  .stat-mini { background:var(--surface2); border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .stat-mini-label { font-size:12px; color:var(--text2); }
+  .stat-mini-val { font-size:15px; font-weight:600; color:var(--text); font-family:'DM Mono',monospace; }
+</style>
+
+<div class="notif-toolbar">
+  <div class="notif-filters">
+    <button class="nf-btn active" onclick="setNF('all',this)">All</button>
+    <button class="nf-btn" onclick="setNF('unread',this)">Unread</button>
+    <button class="nf-btn" onclick="setNF('diagnosis_done',this)">Diagnosis</button>
+    <button class="nf-btn" onclick="setNF('disease_alert',this)">Alerts</button>
+    <button class="nf-btn" onclick="setNF('weather_alert',this)">Weather</button>
+  </div>
+  <button class="btn btn-ghost btn-sm" onclick="markAllRead()">Mark all read</button>
+</div>
+
+<div class="notif-layout">
+  <div>
+    <div id="notif-list"><div style="color:var(--text2);font-size:13px;padding:20px 0;text-align:center">Loading…</div></div>
+  </div>
+  <div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-title">Summary</div>
+      <div class="stat-mini"><span class="stat-mini-label">Total</span><span class="stat-mini-val" id="ns-total">—</span></div>
+      <div class="stat-mini"><span class="stat-mini-label">Unread</span><span class="stat-mini-val" id="ns-unread" style="color:var(--green)">—</span></div>
+      <div class="stat-mini"><span class="stat-mini-label">Alerts</span><span class="stat-mini-val" id="ns-alerts" style="color:var(--red)">—</span></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Notification types</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px">
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:6px;background:var(--green-bg);display:flex;align-items:center;justify-content:center;font-size:14px">🔬</div><span style="color:var(--text2)">Diagnosis results ready</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:6px;background:var(--red-bg);display:flex;align-items:center;justify-content:center;font-size:14px">🚨</div><span style="color:var(--text2)">Disease detected alerts</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:6px;background:var(--blue-bg);display:flex;align-items:center;justify-content:center;font-size:14px">⛈️</div><span style="color:var(--text2)">Weather alerts</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><div style="width:28px;height:28px;border-radius:6px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:14px">ℹ️</div><span style="color:var(--text2)">System messages</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  let notifs=[], nFilter='all';
+  const TYPE_ICON = { diagnosis_done:{icon:'🔬',bg:'var(--green-bg)'}, disease_alert:{icon:'🚨',bg:'var(--red-bg)'}, weather_alert:{icon:'⛈️',bg:'var(--blue-bg)'}, system:{icon:'ℹ️',bg:'var(--surface3)'} };
+
+  async function loadNotifications() {
+    const res = await apiFetch('/api/notify/notifications/');
+    notifs = res?.ok ? await res.json() : [];
+    const unread = notifs.filter(n=>!n.is_read).length;
+    const alerts = notifs.filter(n=>n.type==='disease_alert').length;
+    document.getElementById('ns-total').textContent  = notifs.length;
+    document.getElementById('ns-unread').textContent = unread;
+    document.getElementById('ns-alerts').textContent = alerts;
+    renderNotifs();
+  }
+
+  function setNF(f, btn) {
+    nFilter=f; document.querySelectorAll('.nf-btn').forEach(b=>b.classList.remove('active')); btn.classList.add('active'); renderNotifs();
+  }
+
+  function renderNotifs() {
+    let list = nFilter==='all' ? notifs : nFilter==='unread' ? notifs.filter(n=>!n.is_read) : notifs.filter(n=>n.type===nFilter);
+    const el = document.getElementById('notif-list');
+    if (!list.length) { el.innerHTML='<div class="empty-state"><p>No notifications</p></div>'; return; }
+    el.innerHTML = list.map(n => {
+      const t = TYPE_ICON[n.type] || {icon:'📢',bg:'var(--surface3)'};
+      const timeAgo = formatTime(n.created_at);
+      return `<div class="notif-item ${n.is_read?'read':'unread'}">
+        <div class="notif-icon" style="background:${t.bg}">${t.icon}</div>
+        <div class="notif-body">
+          <div class="notif-title">${n.title}</div>
+          <div class="notif-msg">${n.message}</div>
+          <div class="notif-time">${timeAgo}</div>
+        </div>
+        <div class="notif-actions">
+          ${!n.is_read ? `<div class="unread-dot"></div>` : ''}
+          ${!n.is_read ? `<button class="btn btn-ghost btn-sm" onclick="markRead('${n.id}')">Read</button>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function formatTime(ts) {
+    const diff = Date.now() - new Date(ts).getTime();
+    const m = Math.floor(diff/60000), h = Math.floor(m/60), d = Math.floor(h/24);
+    if (d>0) return d+'d ago'; if (h>0) return h+'h ago'; if (m>0) return m+'m ago'; return 'Just now';
+  }
+
+  async function markRead(id) {
+    await apiFetch(`/api/notify/notifications/${id}/read/`,{method:'POST'});
+    loadNotifications();
+  }
+  async function markAllRead() {
+    await apiFetch('/api/notify/notifications/read-all/',{method:'POST'});
+    loadNotifications();
+  }
+
+  loadNotifications();
+  setInterval(loadNotifications, 20000);
+</script>
+{% endblock %}

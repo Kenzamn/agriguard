@@ -1,0 +1,302 @@
+version: '3.9'
+
+networks:
+  agriguard-net:
+    driver: bridge
+
+volumes:
+  auth_db_data:
+  farm_db_data:
+  diagnosis_db_data:
+  notification_db_data:
+  diagnosis_media:
+  rabbitmq_data:
+  consul_data:
+
+services:
+
+  # ── INFRASTRUCTURE ──────────────────────────────────
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: agriguard-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - agriguard-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  consul:
+    image: hashicorp/consul:1.18
+    container_name: agriguard-consul
+    command: agent -dev -client=0.0.0.0
+    ports:
+      - "8500:8500"
+    volumes:
+      - consul_data:/consul/data
+    networks:
+      - agriguard-net
+    healthcheck:
+      test: ["CMD", "consul", "members"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  traefik:
+    image: traefik:v3.3
+    container_name: agriguard-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.traefik.address=:8888"
+      - "--providers.consulcatalog=true"
+      - "--providers.consulcatalog.endpoint.address=http://consul:8500"
+      - "--providers.consulcatalog.exposedbydefault=false"
+    ports:
+      - "80:80"
+      - "8888:8888"
+    networks:
+      - agriguard-net
+    depends_on:
+      consul:
+        condition: service_healthy
+
+  # ── DATABASES ────────────────────────────────────────
+
+  auth-db:
+    image: postgres:16-alpine
+    container_name: agriguard-auth-db
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: kenza
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    networks:
+      - agriguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  farm-db:
+    image: postgres:16-alpine
+    container_name: agriguard-farm-db
+    environment:
+      POSTGRES_DB: farm_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: kenza
+    volumes:
+      - farm_db_data:/var/lib/postgresql/data
+    networks:
+      - agriguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d farm_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  diagnosis-db:
+    image: postgres:16-alpine
+    container_name: agriguard-diagnosis-db
+    environment:
+      POSTGRES_DB: diagnosis_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: kenza
+    volumes:
+      - diagnosis_db_data:/var/lib/postgresql/data
+    networks:
+      - agriguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d diagnosis_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notification-db:
+    image: postgres:16-alpine
+    container_name: agriguard-notification-db
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: kenza
+    volumes:
+      - notification_db_data:/var/lib/postgresql/data
+    networks:
+      - agriguard-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── DJANGO SERVICES ──────────────────────────────────
+
+  auth-service:
+    build: ./auth_service
+    container_name: agriguard-auth
+    env_file: .env
+    environment:
+      DB_HOST: auth-db
+      DB_NAME: auth_db
+      DB_USER: postgres
+      DB_PASSWORD: kenza
+    networks:
+      - agriguard-net
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/api/auth/health/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  farm-service:
+    build: ./farm_service
+    container_name: agriguard-farm
+    env_file: .env
+    environment:
+      DB_HOST: farm-db
+      DB_NAME: farm_db
+      DB_USER: postgres
+      DB_PASSWORD: kenza
+    networks:
+      - agriguard-net
+    depends_on:
+      farm-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+
+  farm-consumer:
+    build: ./farm_service
+    container_name: agriguard-farm-consumer
+    command: python manage.py consume_events
+    env_file: .env
+    environment:
+      DB_HOST: farm-db
+      DB_NAME: farm_db
+      DB_USER: postgres
+      DB_PASSWORD: kenza
+    networks:
+      - agriguard-net
+    depends_on:
+      farm-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  diagnosis-service:
+    build: ./diagnosis_service
+    container_name: agriguard-diagnosis
+    env_file: .env
+    environment:
+      DB_HOST: diagnosis-db
+      DB_NAME: diagnosis_db
+      DB_USER: postgres
+      DB_PASSWORD: kenza
+    volumes:
+      - diagnosis_media:/app/media
+    networks:
+      - agriguard-net
+    depends_on:
+      diagnosis-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+
+  notification-service:
+    build: ./notification_service
+    container_name: agriguard-notification
+    env_file: .env
+    environment:
+      DB_HOST: notification-db
+      DB_NAME: notification_db
+      DB_USER: postgres
+      DB_PASSWORD: kenza
+    networks:
+      - agriguard-net
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+
+  notification-consumer:
+    build: ./notification_service
+    container_name: agriguard-notification-consumer
+    command: python manage.py consume_events
+    env_file: .env
+    environment:
+      DB_HOST: notification-db
+      DB_NAME: notification_db
+      DB_USER: postgres
+      DB_PASSWORD: kenza
+    networks:
+      - agriguard-net
+    depends_on:
+      notification-db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway-service:
+    build: ./gateway_service
+    container_name: agriguard-gateway
+    env_file: .env
+    networks:
+      - agriguard-net
+    depends_on:
+      consul:
+        condition: service_healthy
+
+  weather-scheduler:
+    build: ./gateway_service
+    container_name: agriguard-weather-scheduler
+    command: >
+      sh -c "echo 'Waiting for RabbitMQ...' &&
+             sleep 30 &&
+             python manage.py weather_alerts --loop --interval 180"
+    env_file: .env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      CONSUL_HOST: consul
+    networks:
+      - agriguard-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  consul-registrar:
+    build: ./consul_registrar
+    container_name: agriguard-consul-registrar
+    networks:
+      - agriguard-net
+    depends_on:
+      consul:
+        condition: service_healthy
+    restart: unless-stopped

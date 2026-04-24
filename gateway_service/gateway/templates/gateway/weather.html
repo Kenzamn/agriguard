@@ -1,0 +1,117 @@
+{% extends 'gateway/base.html' %}
+{% block title %}Weather{% endblock %}
+{% block page_title %}Weather & Watering Advice{% endblock %}
+{% block content %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+  <div class="card">
+    <div class="card-title">Current Conditions</div>
+    <div id="weather-main" style="text-align:center;padding:20px 0">
+      <div class="spinner" style="margin:0 auto"></div>
+    </div>
+    <div id="watering-advice" style="margin-top:16px;padding:14px;border-radius:8px;display:none">
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">5-Day Forecast</div>
+    <div id="forecast-grid" style="display:grid;gap:10px">
+      <p style="color:var(--text2)">Loading…</p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  const WEATHER_KEY = 'bd5e378503939ddaee76f12ad7a97608'; // open-meteo is free, no key needed
+
+  async function loadWeather() {
+    const user = getUser();
+    // Map wilaya to coordinates (subset)
+    const coords = {
+      alger:{lat:36.74,lon:3.06}, oran:{lat:35.69,lon:-0.64},
+      constantine:{lat:36.36,lon:6.61}, annaba:{lat:36.9,lon:7.76},
+      batna:{lat:35.55,lon:6.17}, setif:{lat:36.19,lon:5.41},
+      tizi_ouzou:{lat:36.71,lon:4.04}, bejaia:{lat:36.75,lon:5.06},
+      blida:{lat:36.47,lon:2.83}, biskra:{lat:34.85,lon:5.73},
+      ouargla:{lat:31.95,lon:5.32}, tlemcen:{lat:34.88,lon:-1.32},
+    };
+    const loc = coords[user.wilaya] || coords['alger'];
+
+    try {
+      const res = await fetch(
+        `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
+        `&current=temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation,weathercode` +
+        `&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode` +
+        `&timezone=Africa%2FAlgiers&forecast_days=5`
+      );
+      const data = await res.json();
+      renderWeather(data, user.wilaya);
+    } catch(e) {
+      document.getElementById('weather-main').innerHTML = '<p style="color:var(--text2)">Could not load weather data.</p>';
+    }
+  }
+
+  function weatherIcon(code) {
+    if (code === 0) return '☀️';
+    if (code <= 3) return '⛅';
+    if (code <= 67) return '🌧️';
+    if (code <= 77) return '❄️';
+    if (code <= 82) return '🌦️';
+    return '⛈️';
+  }
+
+  function wateringAdvice(temp, humidity, wind, precip) {
+    if (precip > 5) return { msg: 'No watering needed — rain expected today.', color: 'var(--blue)', icon: '💧' };
+    if (humidity > 80) return { msg: 'High humidity — skip watering to prevent fungal disease.', color: 'var(--yellow)', icon: '⚠️' };
+    if (temp > 35) return { msg: 'Water early morning or evening — avoid midday heat.', color: 'var(--yellow)', icon: '🌡️' };
+    if (wind > 30) return { msg: 'High winds — drip irrigation preferred today.', color: 'var(--yellow)', icon: '💨' };
+    if (temp < 10) return { msg: 'Cool conditions — reduce watering frequency.', color: 'var(--blue)', icon: '🧊' };
+    return { msg: 'Good conditions for watering. Morning recommended.', color: 'var(--green)', icon: '✅' };
+  }
+
+  function renderWeather(data, wilaya) {
+    const c = data.current;
+    const advice = wateringAdvice(c.temperature_2m, c.relative_humidity_2m, c.wind_speed_10m, c.precipitation);
+
+    document.getElementById('weather-main').innerHTML = `
+      <div style="font-size:64px;margin-bottom:8px">${weatherIcon(c.weathercode)}</div>
+      <div style="font-size:48px;font-weight:700;margin-bottom:4px">${Math.round(c.temperature_2m)}°C</div>
+      <div style="color:var(--text2);font-size:14px;text-transform:capitalize">${(wilaya||'Algeria').replace('_',' ')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:20px">
+        <div style="background:var(--surface2);border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Humidity</div>
+          <div style="font-size:18px;font-weight:600">${c.relative_humidity_2m}%</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Wind</div>
+          <div style="font-size:18px;font-weight:600">${c.wind_speed_10m} km/h</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px">
+          <div style="font-size:11px;color:var(--text2);text-transform:uppercase;margin-bottom:4px">Precip.</div>
+          <div style="font-size:18px;font-weight:600">${c.precipitation} mm</div>
+        </div>
+      </div>`;
+
+    const adv = document.getElementById('watering-advice');
+    adv.style.display = 'block';
+    adv.style.background = advice.color + '18';
+    adv.style.border = `1px solid ${advice.color}40`;
+    adv.innerHTML = `<span style="font-size:20px">${advice.icon}</span> <strong style="color:${advice.color}">Watering advice:</strong><br/><span style="font-size:14px;color:var(--text)">${advice.msg}</span>`;
+
+    // Forecast
+    const days = data.daily;
+    const fg = document.getElementById('forecast-grid');
+    fg.innerHTML = days.time.map((day, i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:13px;color:var(--text2);width:80px">${new Date(day).toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'})}</span>
+        <span style="font-size:20px">${weatherIcon(days.weathercode[i])}</span>
+        <span style="font-size:13px;color:var(--blue)">${Math.round(days.temperature_2m_min[i])}°</span>
+        <span style="font-size:13px;font-weight:600">${Math.round(days.temperature_2m_max[i])}°</span>
+        <span style="font-size:12px;color:var(--blue)">${days.precipitation_sum[i]}mm</span>
+      </div>`).join('');
+  }
+
+  loadWeather();
+</script>
+{% endblock %}

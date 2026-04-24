@@ -1,0 +1,17 @@
+entryPoints:
+  web:
+    address: ":80"
+  traefik:
+    address: ":8888"
+
+# Traefik asks Consul for service locations — no hardcoded ports
+providers:
+  consulCatalog:
+    endpoint:
+      address: "http://127.0.0.1:8500"
+    exposedByDefault: false   # only expose services that explicitly opt in
+    defaultRule: "PathPrefix(`/api/{{ .Name }}`)"
+
+api:
+  dashboard: true
+  insecure: true

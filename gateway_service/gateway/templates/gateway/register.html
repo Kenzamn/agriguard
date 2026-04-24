@@ -1,0 +1,130 @@
+{% extends 'gateway/base.html' %}
+{% block title %}Register{% endblock %}
+{% block page_title %}{% endblock %}
+{% block content %}
+<style>
+  .sidebar, .topbar { display:none !important; }
+  .main { margin-left:0 !important; }
+  .content { padding:0 !important; max-width:100% !important; }
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+    background: var(--bg);
+  }
+  .reg-box { width: 100%; max-width: 560px; }
+  .reg-header { text-align: center; margin-bottom: 32px; }
+  .reg-logo { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 24px; text-decoration: none; }
+  .reg-logo-icon { width: 36px; height: 36px; background: var(--green-bg); border: 1px solid var(--green-ring); border-radius: 10px; display:flex; align-items:center; justify-content:center; color:var(--green); }
+  .reg-logo-icon svg { width:20px; height:20px; }
+  .reg-logo-name { font-size:18px; font-weight:600; color:var(--text); }
+  .reg-title { font-size: 22px; font-weight: 600; color: var(--text); margin-bottom: 6px; }
+  .reg-sub { font-size: 14px; color: var(--text2); }
+  .step-dots { display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: 24px; }
+  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--surface3); transition: all 0.2s; }
+  .step-dot.active { background: var(--green); width: 24px; border-radius: 4px; }
+  .step-dot.done { background: var(--green); opacity: 0.4; }
+</style>
+
+<div class="auth-wrap">
+  <div class="reg-box">
+    <div class="reg-header">
+      <a href="/" class="reg-logo">
+        <div class="reg-logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 12s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/></svg>
+        </div>
+        <span class="reg-logo-name">AgriGuard</span>
+      </a>
+      <div class="reg-title">Create your account</div>
+      <div class="reg-sub">Join thousands of Algerian farmers using AI crop protection</div>
+    </div>
+
+    <div class="card">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">First name *</label>
+          <input class="form-control" id="first_name" placeholder="Youcef" autocomplete="given-name"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Last name *</label>
+          <input class="form-control" id="last_name" placeholder="Benali" autocomplete="family-name"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email address *</label>
+        <input class="form-control" type="email" id="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Wilaya *</label>
+        <select class="form-control" id="wilaya">
+          <option value="">Select your wilaya</option>
+          <option value="adrar">Adrar</option><option value="chlef">Chlef</option>
+          <option value="laghouat">Laghouat</option><option value="oum_el_bouaghi">Oum El Bouaghi</option>
+          <option value="batna">Batna</option><option value="bejaia">Béjaïa</option>
+          <option value="biskra">Biskra</option><option value="bechar">Béchar</option>
+          <option value="blida">Blida</option><option value="bouira">Bouira</option>
+          <option value="tamanrasset">Tamanrasset</option><option value="tebessa">Tébessa</option>
+          <option value="tlemcen">Tlemcen</option><option value="tiaret">Tiaret</option>
+          <option value="tizi_ouzou">Tizi Ouzou</option><option value="alger">Alger</option>
+          <option value="djelfa">Djelfa</option><option value="jijel">Jijel</option>
+          <option value="setif">Sétif</option><option value="saida">Saïda</option>
+          <option value="skikda">Skikda</option><option value="sidi_bel_abbes">Sidi Bel Abbès</option>
+          <option value="annaba">Annaba</option><option value="guelma">Guelma</option>
+          <option value="constantine">Constantine</option><option value="medea">Médéa</option>
+          <option value="mostaganem">Mostaganem</option><option value="msila">M'Sila</option>
+          <option value="mascara">Mascara</option><option value="ouargla">Ouargla</option>
+          <option value="oran">Oran</option><option value="el_bayadh">El Bayadh</option>
+          <option value="illizi">Illizi</option><option value="bordj_bou_arreridj">Bordj Bou Arréridj</option>
+          <option value="boumerdes">Boumerdès</option><option value="el_tarf">El Tarf</option>
+          <option value="tindouf">Tindouf</option><option value="tissemsilt">Tissemsilt</option>
+          <option value="el_oued">El Oued</option><option value="khenchela">Khenchela</option>
+          <option value="souk_ahras">Souk Ahras</option><option value="tipaza">Tipaza</option>
+          <option value="mila">Mila</option><option value="ain_defla">Aïn Defla</option>
+          <option value="naama">Naâma</option><option value="ain_temouchent">Aïn Témouchent</option>
+          <option value="ghardaia">Ghardaïa</option><option value="relizane">Relizane</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Password *</label>
+          <input class="form-control" type="password" id="password" placeholder="Min. 8 characters" autocomplete="new-password"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm password *</label>
+          <input class="form-control" type="password" id="password2" placeholder="Repeat password" autocomplete="new-password"/>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;font-size:14px;margin-top:4px" onclick="doRegister()" id="reg-btn">
+        Create account
+      </button>
+      <p style="text-align:center;font-size:13px;color:var(--text2);margin-top:16px">
+        Already have an account? <a href="/" style="color:var(--green);text-decoration:none;font-weight:500">Sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  async function doRegister() {
+    const btn = document.getElementById('reg-btn');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;border-color:#fff3;border-top-color:#fff"></span> Creating account…';
+    const res = await fetch('/api/auth/register/', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        email: document.getElementById('email').value,
+        password: document.getElementById('password').value,
+        password2: document.getElementById('password2').value,
+        first_name: document.getElementById('first_name').value,
+        last_name: document.getElementById('last_name').value,
+        wilaya: document.getElementById('wilaya').value,
+      })
+    });
+    const data = await res.json();
+    if (res.ok) { saveAuth(data); window.location.href = '/dashboard/'; }
+    else { const msg = Object.values(data).flat().join(' '); toast(msg, 'error'); btn.disabled = false; btn.textContent = 'Create account'; }
+  }
+</script>
+{% endblock %}

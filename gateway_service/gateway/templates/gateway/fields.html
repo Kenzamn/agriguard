@@ -1,0 +1,206 @@
+{% extends 'gateway/base.html' %}
+{% block title %}My Fields{% endblock %}
+{% block page_title %}My Fields{% endblock %}
+{% block content %}
+<style>
+  .fields-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .toolbar-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .search-box { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border2); border-radius:8px; padding:0 12px; height:36px; }
+  .search-box svg { width:15px; height:15px; color:var(--text3); flex-shrink:0; }
+  .search-box input { background:none; border:none; outline:none; font-size:13.5px; color:var(--text); width:200px; font-family:inherit; }
+  .search-box input::placeholder { color:var(--text3); }
+  .filter-btn { height:36px; display:flex; align-items:center; gap:6px; padding:0 12px; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid var(--border2); background:var(--surface); color:var(--text2); transition:all 0.15s; }
+  .filter-btn.active { background:var(--green-bg); border-color:var(--green-ring); color:var(--green); }
+  .filter-btn:hover { color:var(--text); border-color:var(--border2); }
+
+  .fields-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:14px; }
+  .field-card {
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    overflow:hidden;
+    transition:border-color 0.15s, transform 0.15s;
+    cursor:pointer;
+  }
+  .field-card:hover { border-color:var(--border2); transform:translateY(-1px); }
+  .field-card-top { height:6px; }
+  .field-card-body { padding:16px; }
+  .field-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+  .field-card-name { font-size:14px; font-weight:600; color:var(--text); }
+  .field-card-crop { font-size:12px; color:var(--text2); margin-top:2px; }
+  .field-card-meta { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+  .field-meta-item { background:var(--surface2); border-radius:6px; padding:8px 10px; }
+  .field-meta-label { font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text3); font-weight:600; margin-bottom:2px; }
+  .field-meta-value { font-size:13px; font-weight:500; color:var(--text); }
+  .field-card-actions { display:flex; gap:6px; padding-top:12px; border-top:1px solid var(--border); }
+</style>
+
+<div class="fields-toolbar">
+  <div class="toolbar-left">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="search-input" placeholder="Search fields…" oninput="filterFields()"/>
+    </div>
+    <button class="filter-btn active" data-filter="all" onclick="setFilter('all',this)">All</button>
+    <button class="filter-btn" data-filter="healthy" onclick="setFilter('healthy',this)">Healthy</button>
+    <button class="filter-btn" data-filter="warning" onclick="setFilter('warning',this)">Warning</button>
+    <button class="filter-btn" data-filter="disease" onclick="setFilter('disease',this)">Disease</button>
+  </div>
+  <button class="btn btn-primary" onclick="openModal()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Add Field
+  </button>
+</div>
+
+<div id="fields-count" style="font-size:12px;color:var(--text3);margin-bottom:12px">Loading…</div>
+<div class="fields-grid" id="fields-grid"></div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="field-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-title">Add Field</span>
+      <button class="btn-icon" onclick="closeModal()" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Field Name *</label><input class="form-control" id="f-name" placeholder="North Wheat Field"/></div>
+      <div class="form-group"><label class="form-label">Crop Type *</label><input class="form-control" id="f-crop" placeholder="Wheat"/></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Area (hectares) *</label><input class="form-control" type="number" id="f-area" placeholder="5.5" step="0.1" min="0"/></div>
+      <div class="form-group"><label class="form-label">Planted Date *</label><input class="form-control" type="date" id="f-date"/></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Soil Type</label>
+        <select class="form-control" id="f-soil">
+          <option value="">Not specified</option>
+          <option value="clay">Clay</option><option value="sandy">Sandy</option>
+          <option value="loamy">Loamy</option><option value="silty">Silty</option>
+          <option value="peaty">Peaty</option><option value="chalky">Chalky</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Irrigation Method</label>
+        <select class="form-control" id="f-irr">
+          <option value="">Not specified</option>
+          <option value="drip">Drip</option><option value="sprinkler">Sprinkler</option>
+          <option value="flood">Flood</option><option value="manual">Manual</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea class="form-control" id="f-notes" rows="2" placeholder="Optional notes about this field…"></textarea></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveField()" id="save-btn">Save Field</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  let allFields = [], activeFilter = 'all';
+
+  const STATUS_COLORS = { healthy:'#20c97e', warning:'#f5c542', disease:'#f0605a', '':'#555e72' };
+
+  async function loadFields() {
+    const res = await apiFetch('/api/farms/fields/');
+    allFields = res?.ok ? await res.json() : [];
+    renderFields();
+  }
+
+  function filterFields() { renderFields(); }
+  function setFilter(f, btn) {
+    activeFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderFields();
+  }
+
+  function renderFields() {
+    const q = document.getElementById('search-input').value.toLowerCase();
+    let list = allFields.filter(f => {
+      const matchFilter = activeFilter === 'all' || f.status === activeFilter;
+      const matchSearch = !q || f.name.toLowerCase().includes(q) || f.crop_type.toLowerCase().includes(q);
+      return matchFilter && matchSearch;
+    });
+    document.getElementById('fields-count').textContent = `${list.length} of ${allFields.length} field${allFields.length!==1?'s':''}`;
+    const grid = document.getElementById('fields-grid');
+    if (!list.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p>No fields match your search</p></div>';
+      return;
+    }
+    grid.innerHTML = list.map(f => `
+      <div class="field-card">
+        <div class="field-card-top" style="background:${STATUS_COLORS[f.status]||'var(--surface3)'}"></div>
+        <div class="field-card-body">
+          <div class="field-card-header">
+            <div>
+              <div class="field-card-name">${f.name}</div>
+              <div class="field-card-crop">${f.crop_type}</div>
+            </div>
+            <span class="status status-${f.status}">${f.status}</span>
+          </div>
+          <div class="field-card-meta">
+            <div class="field-meta-item"><div class="field-meta-label">Area</div><div class="field-meta-value">${f.area_ha} ha</div></div>
+            <div class="field-meta-item"><div class="field-meta-label">Planted</div><div class="field-meta-value">${f.planted_date}</div></div>
+            <div class="field-meta-item"><div class="field-meta-label">Soil</div><div class="field-meta-value">${f.soil_type||'—'}</div></div>
+            <div class="field-meta-item"><div class="field-meta-label">Irrigation</div><div class="field-meta-value">${f.irrigation_method||'—'}</div></div>
+          </div>
+          ${f.notes ? `<div style="font-size:12px;color:var(--text2);margin-bottom:12px;line-height:1.5">${f.notes}</div>` : ''}
+          <div class="field-card-actions">
+            <button class="btn btn-ghost btn-sm" style="flex:1;justify-content:center" onclick="editField('${f.id}')">Edit</button>
+            <a href="/diagnosis/" class="btn btn-primary btn-sm" style="flex:1;justify-content:center;text-decoration:none">Diagnose</a>
+            <button class="btn btn-danger btn-sm" onclick="deleteField('${f.id}')">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  let editingId = null;
+  function openModal(id=null) {
+    editingId = id;
+    document.getElementById('modal-title').textContent = id ? 'Edit Field' : 'Add Field';
+    if (id) {
+      const f = allFields.find(x=>x.id===id);
+      document.getElementById('f-name').value  = f.name;
+      document.getElementById('f-crop').value  = f.crop_type;
+      document.getElementById('f-area').value  = f.area_ha;
+      document.getElementById('f-date').value  = f.planted_date;
+      document.getElementById('f-soil').value  = f.soil_type||'';
+      document.getElementById('f-irr').value   = f.irrigation_method||'';
+      document.getElementById('f-notes').value = f.notes||'';
+    } else {
+      ['f-name','f-crop','f-area','f-date','f-notes'].forEach(i=>document.getElementById(i).value='');
+      document.getElementById('f-soil').value=''; document.getElementById('f-irr').value='';
+    }
+    document.getElementById('field-modal').classList.add('open');
+  }
+  function closeModal() { document.getElementById('field-modal').classList.remove('open'); editingId=null; }
+  function editField(id) { openModal(id); }
+
+  async function saveField() {
+    const btn = document.getElementById('save-btn');
+    btn.disabled=true; btn.textContent='Saving…';
+    const body = { name:document.getElementById('f-name').value, crop_type:document.getElementById('f-crop').value, area_ha:document.getElementById('f-area').value, planted_date:document.getElementById('f-date').value, soil_type:document.getElementById('f-soil').value, irrigation_method:document.getElementById('f-irr').value, notes:document.getElementById('f-notes').value };
+    const res = await apiFetch(editingId?`/api/farms/fields/${editingId}/`:'/api/farms/fields/', { method:editingId?'PUT':'POST', body:JSON.stringify(body) });
+    if (res?.ok) { toast(editingId?'Field updated!':'Field created!'); closeModal(); loadFields(); }
+    else { const e=await res.json(); toast(Object.values(e).flat().join(' '),'error'); }
+    btn.disabled=false; btn.textContent='Save Field';
+  }
+
+  async function deleteField(id) {
+    if (!confirm('Delete this field? All associated diagnoses will remain but the field will be removed.')) return;
+    const res = await apiFetch(`/api/farms/fields/${id}/`,{method:'DELETE'});
+    if (res?.ok) { toast('Field deleted'); loadFields(); }
+    else toast('Delete failed','error');
+  }
+
+  loadFields();
+</script>
+{% endblock %}

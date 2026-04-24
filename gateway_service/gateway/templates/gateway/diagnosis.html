@@ -1,0 +1,147 @@
+{% extends 'gateway/base.html' %}
+{% block title %}Diagnosis{% endblock %}
+{% block page_title %}Crop Diagnosis{% endblock %}
+{% block content %}
+<style>
+  .diag-layout { display:grid; grid-template-columns:360px 1fr; gap:16px; align-items:start; }
+  @media (max-width:900px) { .diag-layout { grid-template-columns:1fr; } }
+  .upload-zone { border:2px dashed var(--border2); border-radius:10px; padding:28px 16px; text-align:center; cursor:pointer; transition:all 0.2s; background:var(--surface2); }
+  .upload-zone:hover,.upload-zone.dragover { border-color:var(--green); background:var(--green-bg); }
+  .upload-zone svg { width:32px; height:32px; color:var(--text3); margin-bottom:10px; }
+  .upload-zone p { font-size:13px; color:var(--text2); }
+  .upload-zone small { font-size:11px; color:var(--text3); margin-top:4px; display:block; }
+  .result-card { border-radius:12px; padding:16px; border:1px solid; margin-top:14px; display:none; }
+  .result-healthy { background:var(--green-bg); border-color:var(--green-ring); }
+  .result-disease { background:var(--red-bg); border-color:rgba(240,96,90,0.2); }
+  .result-label { font-size:14px; font-weight:600; margin-bottom:4px; }
+  .conf-bar { height:6px; border-radius:3px; background:var(--surface3); margin-top:8px; overflow:hidden; }
+  .conf-fill { height:100%; border-radius:3px; transition:width 0.8s ease; }
+  .hist-filter { height:32px; padding:0 12px; border-radius:20px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--border2); background:none; color:var(--text2); transition:all 0.15s; font-family:inherit; }
+  .hist-filter.active { background:var(--green-bg); border-color:var(--green-ring); color:var(--green); }
+  .diag-row { display:flex; gap:12px; align-items:flex-start; padding:12px 0; border-bottom:1px solid var(--border); }
+  .diag-row:last-child { border-bottom:none; }
+  .diag-thumb { width:48px; height:48px; border-radius:8px; background:var(--surface3); flex-shrink:0; display:flex; align-items:center; justify-content:center; }
+  .diag-thumb svg { width:20px; height:20px; color:var(--text3); }
+  .diag-info { flex:1; min-width:0; }
+  .diag-disease { font-size:13px; font-weight:500; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .diag-meta { font-size:11px; color:var(--text3); margin-top:3px; }
+</style>
+<div class="diag-layout">
+  <div>
+    <div class="card">
+      <div class="card-title">New Diagnosis</div>
+      <div class="form-group">
+        <label class="form-label">Select field *</label>
+        <select class="form-control" id="d-field"><option value="">Loading fields…</option></select>
+      </div>
+      <div class="upload-zone" id="drop-zone" onclick="document.getElementById('d-image').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p id="drop-label">Click to upload or drag and drop</p>
+        <small>JPEG, PNG, WebP — max 10 MB</small>
+      </div>
+      <input type="file" id="d-image" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="previewImage(this.files[0])"/>
+      <img id="preview-img" style="display:none;width:100%;border-radius:8px;margin-top:12px;max-height:220px;object-fit:cover" alt="Preview"/>
+      <div class="result-card" id="result-card">
+        <div class="result-label" id="result-name">—</div>
+        <div style="font-size:12px;color:var(--text2)" id="result-conf">—</div>
+        <div class="conf-bar"><div class="conf-fill" id="result-bar" style="background:var(--green);width:0%"></div></div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;margin-top:14px;padding:10px" onclick="submitDiagnosis()" id="diag-btn">Analyse Crop</button>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-title">Photo tips</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:10px"><div style="width:28px;height:28px;border-radius:6px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">✓</div><div style="font-size:12.5px;color:var(--text2)">Photograph the <strong style="color:var(--text)">affected leaf clearly</strong>, filling most of the frame</div></div>
+        <div style="display:flex;gap:10px"><div style="width:28px;height:28px;border-radius:6px;background:var(--green-bg);color:var(--green);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">✓</div><div style="font-size:12.5px;color:var(--text2)">Use <strong style="color:var(--text)">natural daylight</strong> — avoid flash and shadows</div></div>
+        <div style="display:flex;gap:10px"><div style="width:28px;height:28px;border-radius:6px;background:var(--red-bg);color:var(--red);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px">✗</div><div style="font-size:12.5px;color:var(--text2)">Avoid <strong style="color:var(--text)">blurry or dark</strong> images</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="card-title" style="margin-bottom:0">Diagnosis History</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadDiagnoses()">Refresh</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="hist-filter active" onclick="setHF('all',this)">All</button>
+      <button class="hist-filter" onclick="setHF('completed',this)">Completed</button>
+      <button class="hist-filter" onclick="setHF('processing',this)">Processing</button>
+      <button class="hist-filter" onclick="setHF('failed',this)">Failed</button>
+    </div>
+    <div id="history-list"><div style="color:var(--text2);font-size:13px;padding:20px 0;text-align:center">Loading…</div></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  let fields=[], allDiags=[], histFilter='all';
+  async function loadFields() {
+    const res = await apiFetch('/api/farms/fields/');
+    fields = res?.ok ? await res.json() : [];
+    const sel = document.getElementById('d-field');
+    sel.innerHTML = fields.length ? '<option value="">Select a field</option>'+fields.map(f=>`<option value="${f.id}">${f.name} (${f.crop_type})</option>`).join('') : '<option value="">No fields yet</option>';
+  }
+  async function loadDiagnoses() {
+    const res = await apiFetch('/api/diagnosis/diagnoses/');
+    allDiags = res?.ok ? await res.json() : [];
+    renderHistory();
+  }
+  function setHF(f, btn) {
+    histFilter=f;
+    document.querySelectorAll('.hist-filter').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); renderHistory();
+  }
+  function renderHistory() {
+    const list = histFilter==='all' ? allDiags : allDiags.filter(d=>d.status===histFilter);
+    const el = document.getElementById('history-list');
+    if (!list.length) { el.innerHTML='<div class="empty-state"><p>No diagnoses found</p></div>'; return; }
+    el.innerHTML = list.map(d => {
+      const field = fields.find(f=>f.id===d.field_id);
+      const conf  = d.result ? Math.round(d.result.confidence_score*100) : null;
+      const dis   = d.result ? d.result.disease_name : d.status;
+      const col   = d.result?.is_healthy===false ? 'var(--red)' : d.result?.is_healthy ? 'var(--green)' : 'var(--text)';
+      return `<div class="diag-row">
+        <div class="diag-thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+        <div class="diag-info">
+          <div class="diag-disease" style="color:${col}">${dis}</div>
+          <div class="diag-meta">${field?field.name:'Unknown'} · ${new Date(d.created_at).toLocaleDateString()}</div>
+          <span class="status status-${d.status}" style="font-size:10px;margin-top:4px;display:inline-flex">${d.status}</span>
+        </div>
+        ${conf!==null ? `<div style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);flex-shrink:0">${conf}%</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+  function previewImage(file) {
+    if (!file) return;
+    document.getElementById('drop-label').textContent = file.name;
+    document.getElementById('result-card').style.display='none';
+    const img = document.getElementById('preview-img');
+    img.style.display='block';
+    const r = new FileReader(); r.onload=e=>img.src=e.target.result; r.readAsDataURL(file);
+  }
+  function handleDrop(e) {
+    e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover');
+    const file = e.dataTransfer.files[0]; if (file) previewImage(file);
+  }
+  async function submitDiagnosis() {
+    const fieldId = document.getElementById('d-field').value;
+    const file = document.getElementById('d-image').files[0];
+    if (!fieldId) { toast('Please select a field','error'); return; }
+    if (!file)   { toast('Please upload an image','error'); return; }
+    const btn = document.getElementById('diag-btn');
+    btn.disabled=true; btn.innerHTML='<span class="spinner" style="width:16px;height:16px;border-width:2px;border-color:#fff3;border-top-color:#fff;display:inline-block;vertical-align:middle;margin-right:6px"></span>Analysing…';
+    const form = new FormData(); form.append('field_id',fieldId); form.append('image',file);
+    const res = await apiFetch('/api/diagnosis/diagnoses/',{method:'POST',body:form});
+    if (res?.ok) {
+      const d = await res.json(); toast('Diagnosis submitted!');
+      document.getElementById('d-image').value=''; document.getElementById('preview-img').style.display='none';
+      document.getElementById('drop-label').textContent='Click to upload or drag and drop';
+      if (d.result) { const rc=document.getElementById('result-card'); rc.className='result-card '+(d.result.is_healthy?'result-healthy':'result-disease'); rc.style.display='block'; document.getElementById('result-name').textContent=d.result.disease_name; const c=Math.round(d.result.confidence_score*100); document.getElementById('result-conf').textContent='Confidence: '+c+'%'; document.getElementById('result-bar').style.cssText='width:'+c+'%;background:'+(d.result.is_healthy?'var(--green)':'var(--red)'); }
+      loadDiagnoses();
+    } else { const e=await res.json(); toast(Object.values(e).flat().join(' '),'error'); }
+    btn.disabled=false; btn.textContent='Analyse Crop';
+  }
+  loadFields().then(loadDiagnoses);
+  setInterval(loadDiagnoses, 15000);
+</script>
+{% endblock %}
