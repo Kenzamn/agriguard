@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
+from django.conf import settings as django_settings
 
 from .serializers import (
     RegisterSerializer, UserSerializer,
@@ -21,7 +22,6 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
-            # issue tokens immediately on register
             refresh = RefreshToken.for_user(user)
             return Response({
                 'user':    UserSerializer(user).data,
@@ -36,11 +36,9 @@ class MeView(APIView):
     permission_classes     = [IsAuthenticated]
 
     def get(self, request):
-        """Return the authenticated farmer's profile."""
         return Response(UserSerializer(request.user).data)
 
     def patch(self, request):
-        """Update own profile (name, wilaya)."""
         serializer = UserSerializer(request.user, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -66,7 +64,6 @@ class LogoutView(APIView):
     permission_classes     = [IsAuthenticated]
 
     def post(self, request):
-        """Blacklist the refresh token to invalidate the session."""
         try:
             refresh = RefreshToken(request.data['refresh'])
             refresh.blacklist()
@@ -76,7 +73,7 @@ class LogoutView(APIView):
                             status=status.HTTP_400_BAD_REQUEST)
 
 
-# ── Admin views ────────────────────────────────────────────────
+# ── Admin views ────────────────────────────────────────────────────────
 
 class AdminUserListView(APIView):
     authentication_classes = [JWTAuthentication]
@@ -108,9 +105,15 @@ class AdminUserDetailView(APIView):
         return Response(AdminUserSerializer(user).data)
 
     def patch(self, request, pk):
-        """Admin can activate/deactivate users or change roles."""
         if request.user.role != 'admin':
             return Response({'detail': 'Admin only.'}, status=status.HTTP_403_FORBIDDEN)
+        # Prevent admins from modifying their own role or active status
+        if str(request.user.pk) == str(pk):
+            if 'role' in request.data or 'is_active' in request.data:
+                return Response(
+                    {'detail': 'You cannot change your own role or active status.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
         user = self.get_object(pk)
         if not user:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
@@ -123,8 +126,46 @@ class AdminUserDetailView(APIView):
     def delete(self, request, pk):
         if request.user.role != 'admin':
             return Response({'detail': 'Admin only.'}, status=status.HTTP_403_FORBIDDEN)
+        if str(request.user.pk) == str(pk):
+            return Response(
+                {'detail': 'You cannot delete your own account.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         user = self.get_object(pk)
         if not user:
             return Response({'detail': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
         user.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ── Internal endpoint (weather-scheduler → auth-service) ──────────────
+
+class InternalFarmersByWilayaView(APIView):
+    """
+    Returns active farmers grouped by wilaya.
+    Called by the weather-scheduler container — NOT exposed via Traefik.
+    Protected by X-Internal-Secret header (shared env var).
+    """
+    permission_classes = [AllowAny]  # auth via secret header
+
+    def get(self, request):
+        secret   = request.headers.get('X-Internal-Secret', '')
+        expected = getattr(django_settings, 'INTERNAL_API_SECRET', '')
+
+        if not expected or secret != expected:
+            return Response({'detail': 'Forbidden.'}, status=status.HTTP_403_FORBIDDEN)
+
+        farmers = (
+            User.objects
+            .filter(is_active=True, role='farmer')
+            .values('id', 'wilaya')
+        )
+
+        result = {}
+        for f in farmers:
+            wilaya = (f['wilaya'] or '').strip()
+            if wilaya:
+                result.setdefault(wilaya, [])
+                result[wilaya].append(str(f['id']))
+
+        return Response(result)

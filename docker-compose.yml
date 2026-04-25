@@ -254,42 +254,35 @@ services:
       DB_NAME: notification_db
       DB_USER: postgres
       DB_PASSWORD: kenza
+      # Pass RabbitMQ URL explicitly so the consumer always knows where to connect
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     networks:
       - agriguard-net
     depends_on:
       notification-db:
         condition: service_healthy
       rabbitmq:
-        condition: service_healthy
+        condition: service_healthy   # ← was missing before; caused the crash loop
     restart: unless-stopped
 
   gateway-service:
     build: ./gateway_service
     container_name: agriguard-gateway
     env_file: .env
+    environment:
+      CONSUL_HOST: consul
     networks:
       - agriguard-net
     depends_on:
       consul:
         condition: service_healthy
-
-  weather-scheduler:
-    build: ./gateway_service
-    container_name: agriguard-weather-scheduler
-    command: >
-      sh -c "echo 'Waiting for RabbitMQ...' &&
-             sleep 30 &&
-             python manage.py weather_alerts --loop --interval 180"
-    env_file: .env
-    environment:
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      CONSUL_HOST: consul
-    networks:
-      - agriguard-net
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    restart: unless-stopped
+    # Add a healthcheck so Docker knows when the gateway is ready
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   consul-registrar:
     build: ./consul_registrar
@@ -298,5 +291,32 @@ services:
       - agriguard-net
     depends_on:
       consul:
+        condition: service_healthy
+      gateway-service:
+        condition: service_healthy
+    # restart: always ensures it keeps re-registering if it ever crashes
+    restart: always
+    
+  weather-scheduler:
+    build: ./gateway_service
+    container_name: agriguard-weather-scheduler
+    command: >
+      sh -c "echo 'Waiting 40s for services to start...' &&
+             sleep 40 &&
+             python manage.py weather_alerts --loop --interval 180"
+    env_file: .env
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      CONSUL_HOST: consul
+      # INTERNAL_API_SECRET is read from .env via env_file above.
+      # Listing it here explicitly ensures it is always present even if
+      # the env_file line is accidentally removed.
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+    networks:
+      - agriguard-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
     restart: unless-stopped

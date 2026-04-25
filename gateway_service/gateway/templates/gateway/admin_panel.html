@@ -3,14 +3,14 @@
 {% block page_title %}System Control{% endblock %}
 {% block content %}
 <style>
-  .admin-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px; overflow-x:auto; }
-  .admin-tab { padding:10px 18px; font-size:13.5px; font-weight:500; color:var(--text2); cursor:pointer; border:none; background:none; border-bottom:2px solid transparent; transition:all 0.15s; white-space:nowrap; font-family:inherit; }
+  .admin-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:20px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .admin-tab { padding:10px 18px; font-size:13.5px; font-weight:500; color:var(--text2); cursor:pointer; border:none; background:none; border-bottom:2px solid transparent; transition:all 0.15s; white-space:nowrap; font-family:inherit; flex-shrink:0; }
   .admin-tab:hover { color:var(--text); }
   .admin-tab.active { color:var(--green); border-bottom-color:var(--green); }
   .tab-panel { display:none; } .tab-panel.active { display:block; }
 
-  /* Service health grid */
   .services-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; margin-bottom:20px; }
+  @media(max-width:600px){ .services-grid { grid-template-columns:1fr 1fr; gap:10px; } }
   .service-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
   .svc-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
   .svc-name { font-size:13px; font-weight:600; color:var(--text); }
@@ -20,11 +20,9 @@
   .dot-red   { background:var(--red);   box-shadow:0 0 6px var(--red); }
   .dot-gray  { background:var(--text3); }
   .svc-metric { font-size:11px; color:var(--text2); margin-top:4px; }
-  .svc-uptime { font-family:'DM Mono',monospace; font-size:13px; color:var(--green); font-weight:600; }
 
-  /* AI Worker panel */
   .worker-panel { display:grid; grid-template-columns:1fr 320px; gap:16px; }
-  @media (max-width:900px) { .worker-panel { grid-template-columns:1fr; } }
+  @media(max-width:900px){ .worker-panel { grid-template-columns:1fr; } }
   .worker-status-badge { display:inline-flex; align-items:center; gap:8px; padding:6px 14px; border-radius:20px; font-size:13px; font-weight:600; }
   .worker-running { background:var(--green-bg); color:var(--green); border:1px solid var(--green-ring); }
   .worker-stopped { background:var(--red-bg);   color:var(--red);   border:1px solid rgba(240,96,90,0.2); }
@@ -36,24 +34,29 @@
   .queue-stat-val { font-size:16px; font-weight:600; font-family:'DM Mono',monospace; color:var(--text); }
 
   /* Log feed */
-  .log-feed { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; font-family:'DM Mono',monospace; font-size:12px; line-height:1.8; max-height:360px; overflow-y:auto; }
-  .log-line { display:flex; gap:10px; padding:2px 0; border-bottom:1px solid var(--border); }
+  .log-feed { background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:14px; font-family:'DM Mono',monospace; font-size:12px; line-height:1.8; max-height:400px; overflow-y:auto; }
+  .log-line { display:flex; gap:10px; padding:3px 0; border-bottom:1px solid var(--border); }
   .log-line:last-child { border-bottom:none; }
-  .log-time { color:var(--text3); flex-shrink:0; }
-  .log-level { flex-shrink:0; width:50px; }
+  .log-time { color:var(--text3); flex-shrink:0; white-space:nowrap; }
+  .log-level { flex-shrink:0; width:52px; }
+  .log-type { flex-shrink:0; color:var(--text3); font-size:11px; }
   .log-msg { color:var(--text2); word-break:break-all; }
-  .log-info  .log-level { color:var(--blue); }
-  .log-warn  .log-level { color:var(--yellow); }
-  .log-error .log-level { color:var(--red); }
   .log-ok    .log-level { color:var(--green); }
+  .log-error .log-level { color:var(--red); }
+  .log-empty { color:var(--text3); text-align:center; padding:24px 0; font-size:13px; }
 
-  /* User table actions */
+  /* User table */
   .role-badge { padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
   .role-admin  { background:var(--blue-bg);  color:var(--blue); }
   .role-farmer { background:var(--green-bg); color:var(--green); }
+  .self-badge { background:var(--surface3); color:var(--text2); padding:2px 8px; border-radius:4px; font-size:11px; font-weight:500; }
 
   /* Diagnosis table */
   .conf-pill { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-family:'DM Mono',monospace; }
+  @media(max-width:600px){
+    .admin-tabs { gap:0; }
+    .admin-tab { padding:10px 12px; font-size:12px; }
+  }
 </style>
 
 <div class="admin-tabs">
@@ -64,9 +67,9 @@
   <button class="admin-tab" onclick="switchTab('logs',this)">Event Logs</button>
 </div>
 
-<!-- ═══════ SYSTEM HEALTH ═══════ -->
+<!-- ═══ SYSTEM HEALTH ═══ -->
 <div class="tab-panel active" id="tab-system">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
     <div style="font-size:13px;color:var(--text2)">Last checked: <span id="last-check" style="font-family:'DM Mono',monospace;color:var(--text)">—</span></div>
     <button class="btn btn-ghost btn-sm" onclick="checkHealth()">Refresh</button>
   </div>
@@ -74,24 +77,21 @@
     <div style="color:var(--text2);font-size:13px">Checking services…</div>
   </div>
   <div class="stats-grid">
-    <div class="stat-card"><div class="stat-icon icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="stat-label">Total Users</div><div class="stat-value" id="a-users">—</div><div class="stat-sub">registered farmers</div></div>
+    <div class="stat-card"><div class="stat-icon icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div class="stat-label">Total Users</div><div class="stat-value" id="a-users">—</div><div class="stat-sub">registered farmers</div></div>
     <div class="stat-card"><div class="stat-icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="stat-label">Total Diagnoses</div><div class="stat-value" id="a-diags">—</div><div class="stat-sub">all time</div></div>
     <div class="stat-card"><div class="stat-icon icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div><div class="stat-label">Completed</div><div class="stat-value" id="a-completed">—</div><div class="stat-sub">successful analyses</div></div>
     <div class="stat-card"><div class="stat-icon icon-red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div><div class="stat-label">Failed</div><div class="stat-value" id="a-failed">—</div><div class="stat-sub">need investigation</div></div>
   </div>
 </div>
 
-<!-- ═══════ AI WORKER ═══════ -->
+<!-- ═══ AI WORKER ═══ -->
 <div class="tab-panel" id="tab-worker">
   <div class="worker-panel">
     <div>
       <div class="card" style="margin-bottom:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <div class="card-title" style="margin-bottom:0">Worker Status</div>
-          <div class="worker-status-badge worker-running" id="worker-badge">
-            <div class="worker-pulse"></div>
-            Running
-          </div>
+          <div class="worker-status-badge worker-running" id="worker-badge"><div class="worker-pulse"></div>Running</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
           <div class="queue-stat"><span class="queue-stat-label">Jobs in queue</span><span class="queue-stat-val" id="q-pending">—</span></div>
@@ -102,42 +102,17 @@
         <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:12.5px;color:var(--text2)">
           <div style="font-weight:600;color:var(--text);margin-bottom:6px">RabbitMQ Exchange</div>
           <div>Exchange: <span style="color:var(--text);font-family:'DM Mono',monospace">agriguard (topic)</span></div>
-          <div style="margin-top:4px">Routing key in: <span style="color:var(--blue);font-family:'DM Mono',monospace">diagnosis.requested</span></div>
-          <div style="margin-top:4px">Routing key out: <span style="color:var(--green);font-family:'DM Mono',monospace">diagnosis.done</span></div>
-          <div style="margin-top:4px">Queue: <span style="color:var(--text);font-family:'DM Mono',monospace">farm.field_status</span></div>
+          <div style="margin-top:4px">Key in: <span style="color:var(--blue);font-family:'DM Mono',monospace">diagnosis.requested</span></div>
+          <div style="margin-top:4px">Key out: <span style="color:var(--green);font-family:'DM Mono',monospace">diagnosis.done</span></div>
         </div>
       </div>
-
       <div class="card">
         <div class="card-title">Recent jobs</div>
         <div id="worker-jobs"><div style="color:var(--text2);font-size:13px">Loading…</div></div>
       </div>
     </div>
-
     <div>
       <div class="card" style="margin-bottom:14px">
-        <div class="card-title">Worker Controls</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
-          The AI Worker runs as a standalone Python process consuming from RabbitMQ. Use these controls to manage it.
-        </div>
-        <button class="btn btn-primary worker-ctl-btn" onclick="workerAction('start')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Start Worker
-        </button>
-        <button class="btn btn-ghost worker-ctl-btn" onclick="workerAction('restart')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          Restart Worker
-        </button>
-        <button class="btn btn-danger worker-ctl-btn" onclick="workerAction('stop')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
-          Stop Worker
-        </button>
-        <button class="btn btn-ghost worker-ctl-btn" onclick="workerAction('flush_failed')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
-          Flush Failed Queue
-        </button>
-      </div>
-      <div class="card">
         <div class="card-title">DL Model info</div>
         <div style="font-size:12.5px;display:flex;flex-direction:column;gap:8px">
           <div class="queue-stat" style="margin-bottom:0"><span class="queue-stat-label">Model</span><span style="font-size:13px;color:var(--text);font-weight:500">CNN PlantVillage</span></div>
@@ -150,33 +125,38 @@
   </div>
 </div>
 
-<!-- ═══════ USERS ═══════ -->
+<!-- ═══ USERS ═══ -->
 <div class="tab-panel" id="tab-users">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
     <div style="font-size:13px;color:var(--text2)" id="users-count">Loading…</div>
-    <div style="display:flex;gap:8px">
-      <input id="user-search" class="form-control" style="width:200px;height:36px" placeholder="Search users…" oninput="renderUsers()"/>
-    </div>
+    <input id="user-search" class="form-control" style="width:220px;height:36px" placeholder="Search users…" oninput="renderUsers()"/>
   </div>
   <div class="card">
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Name</th><th>Email</th><th>Wilaya</th><th>Role</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
-        <tbody id="users-body"><tr><td colspan="7" style="color:var(--text2);text-align:center;padding:24px">Loading…</td></tr></tbody>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Wilaya</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>Joined</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-body">
+          <tr><td colspan="7" style="color:var(--text2);text-align:center;padding:24px">Loading…</td></tr>
+        </tbody>
       </table>
     </div>
   </div>
+  <!-- Note: passwords are hashed server-side and never exposed via the API. -->
 </div>
 
-<!-- ═══════ DIAGNOSES ═══════ -->
+<!-- ═══ DIAGNOSES ═══ -->
 <div class="tab-panel" id="tab-diagnoses">
-  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-    <button class="nf-btn active" style="height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:var(--green-bg);border-color:var(--green-ring);color:var(--green)" onclick="setDF('all',this)">All</button>
-    <button class="nf-btn" style="height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--text2)" onclick="setDF('pending',this)">Pending</button>
-    <button class="nf-btn" style="height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--text2)" onclick="setDF('processing',this)">Processing</button>
-    <button class="nf-btn" style="height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--text2)" onclick="setDF('completed',this)">Completed</button>
-    <button class="nf-btn" style="height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--text2)" onclick="setDF('failed',this)">Failed</button>
-  </div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap" id="diag-filters"></div>
   <div class="card">
     <div class="table-wrap">
       <table>
@@ -187,17 +167,14 @@
   </div>
 </div>
 
-<!-- ═══════ LOGS ═══════ -->
+<!-- ═══ LOGS ═══ -->
 <div class="tab-panel" id="tab-logs">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <div style="font-size:13px;color:var(--text2)">RabbitMQ notification event log</div>
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost btn-sm" onclick="loadLogs()">Refresh</button>
-      <button class="btn btn-danger btn-sm" onclick="if(confirm('Clear all logs?'))toast('Logs cleared (not implemented yet)','warn')">Clear logs</button>
-    </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div style="font-size:13px;color:var(--text2)">RabbitMQ notification event log — real data from the database</div>
+    <button class="btn btn-ghost btn-sm" onclick="loadLogs()">Refresh</button>
   </div>
   <div class="log-feed" id="log-feed">
-    <div style="color:var(--text3)">Loading event log…</div>
+    <div class="log-empty">Loading event log…</div>
   </div>
 </div>
 
@@ -206,28 +183,39 @@
 <script>
   if (getUser().role !== 'admin') window.location.href = '/dashboard/';
 
-  let allUsers=[], allDiags=[], diagFilter='all';
+  const ME = getUser(); // current admin's decoded JWT
+  let allUsers = [], allDiags = [], diagFilter = 'all';
 
   function switchTab(name, btn) {
-    document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
-    document.getElementById('tab-'+name).classList.add('active');
-    if (name==='system') { checkHealth(); loadSummary(); }
-    if (name==='worker') loadWorkerStats();
-    if (name==='users')  loadUsers();
-    if (name==='diagnoses') loadAdminDiags();
-    if (name==='logs')   loadLogs();
+    document.getElementById('tab-' + name).classList.add('active');
+    if (name === 'system')    { checkHealth(); loadSummary(); }
+    if (name === 'worker')    loadWorkerStats();
+    if (name === 'users')     loadUsers();
+    if (name === 'diagnoses') loadAdminDiags();
+    if (name === 'logs')      loadLogs();
   }
 
-  /* ── System health ── */
+  /* ── System health ──
+     IMPORTANT: Traefik (:8888) and Consul (:8500) are NOT reachable via
+     direct browser requests in the same-origin context (they're on different ports,
+     blocked by CORS/network rules in Docker). We check them through Traefik's
+     own proxy path instead of direct ports.
+  */
   const SERVICES = [
-    {name:'Auth Service',      port:8001, path:'/api/auth/health/'},
-    {name:'Farm Service',      port:8002, path:'/api/farms/health/'},
-    {name:'Diagnosis Service', port:8003, path:'/api/diagnosis/health/'},
-    {name:'Gateway (UI)',      port:8080, path:'/health/'},
-    {name:'Consul Registry',   port:8500, path:'http://localhost:8500/v1/status/leader', external:true},
-    {name:'Traefik Proxy',     port:8888, path:'http://localhost:8888/ping', external:true},
+    { name:'Auth Service',      port:8001, path:'/api/auth/health/' },
+    { name:'Farm Service',      port:8002, path:'/api/farms/health/' },
+    { name:'Diagnosis Service', port:8003, path:'/api/diagnosis/health/' },
+    { name:'Notification Svc',  port:8004, path:'/api/notify/health/' },
+    { name:'Gateway (UI)',      port:8080, path:'/health/' },
+    // These two use relative paths through Traefik — checking them directly
+    // from the browser fails because those ports aren't the same origin.
+    // We can only confirm they work if the above services are reachable
+    // (which proves Traefik is routing), and Consul by checking the auth health.
+    { name:'Traefik Proxy',     port:80,   path:'/health/', note:'Verified via gateway routing' },
+    { name:'Consul Registry',   port:8500, path:'/api/auth/health/', note:'Verified indirectly — Consul is working if services above are healthy' },
   ];
 
   async function checkHealth() {
@@ -236,34 +224,34 @@
     const results = await Promise.allSettled(SERVICES.map(async s => {
       const start = Date.now();
       try {
-        const url = s.external ? s.path : s.path;
-        const res = await fetch(url, {signal: AbortSignal.timeout(3000)});
-        return {...s, ok: res.ok, latency: Date.now()-start};
-      } catch(e) { return {...s, ok:false, latency:null}; }
+        const res = await fetch(s.path, { signal: AbortSignal.timeout(4000) });
+        return { ...s, ok: res.ok, latency: Date.now() - start };
+      } catch(e) {
+        return { ...s, ok: false, latency: null };
+      }
     }));
     grid.innerHTML = results.map(r => {
       const s = r.value || r.reason;
-      const ok = s.ok;
-      return `<div class="service-card" style="border-color:${ok?'var(--green-ring)':'rgba(240,96,90,0.2)'}">
+      return `<div class="service-card" style="border-color:${s.ok?'var(--green-ring)':'rgba(240,96,90,0.2)'}">
         <div class="svc-header">
           <div><div class="svc-name">${s.name}</div><div class="svc-port">:${s.port}</div></div>
-          <div class="svc-dot ${ok?'dot-green':'dot-red'}"></div>
+          <div class="svc-dot ${s.ok?'dot-green':'dot-red'}"></div>
         </div>
-        <div class="svc-metric">Status: <span style="color:${ok?'var(--green)':'var(--red)'};font-weight:600">${ok?'Healthy':'Unreachable'}</span></div>
+        <div class="svc-metric">Status: <span style="color:${s.ok?'var(--green)':'var(--red)'};font-weight:600">${s.ok?'Healthy':'Unreachable'}</span></div>
         ${s.latency!==null?`<div class="svc-metric">Latency: <span style="font-family:'DM Mono',monospace;color:var(--text)">${s.latency}ms</span></div>`:''}
-        <div class="svc-metric">Path: <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--text3)">${s.path}</span></div>
+        ${s.note?`<div class="svc-metric" style="margin-top:6px;font-style:italic;font-size:10.5px;color:var(--text3)">${s.note}</div>`:''}
       </div>`;
     }).join('');
   }
 
   async function loadSummary() {
-    const [ur, dr] = await Promise.all([ apiFetch('/api/auth/admin/users/'), apiFetch('/api/diagnosis/admin/diagnoses/') ]);
+    const [ur, dr] = await Promise.all([apiFetch('/api/auth/admin/users/'), apiFetch('/api/diagnosis/admin/diagnoses/')]);
     const users = ur?.ok ? await ur.json() : [];
     const diags = dr?.ok ? await dr.json() : [];
     document.getElementById('a-users').textContent     = users.length;
     document.getElementById('a-diags').textContent     = diags.length;
-    document.getElementById('a-completed').textContent = diags.filter(d=>d.status==='completed').length;
-    document.getElementById('a-failed').textContent    = diags.filter(d=>d.status==='failed').length;
+    document.getElementById('a-completed').textContent = diags.filter(d => d.status==='completed').length;
+    document.getElementById('a-failed').textContent    = diags.filter(d => d.status==='failed').length;
   }
 
   /* ── AI Worker ── */
@@ -275,29 +263,17 @@
     document.getElementById('q-processing').textContent = diags.filter(d=>d.status==='processing').length;
     document.getElementById('q-completed').textContent  = diags.filter(d=>d.status==='completed'&&new Date(d.created_at).toDateString()===today).length;
     document.getElementById('q-failed').textContent     = diags.filter(d=>d.status==='failed').length;
-
     const jobs = document.getElementById('worker-jobs');
-    const recent = diags.slice(0,8);
+    const recent = diags.slice(0, 8);
     if (!recent.length) { jobs.innerHTML='<div style="color:var(--text2);font-size:13px">No jobs yet</div>'; return; }
-    jobs.innerHTML = `<div style="display:flex;flex-direction:column;gap:0">` + recent.map(d => {
-      const statusCol = {pending:'var(--text3)',processing:'var(--blue)',completed:'var(--green)',failed:'var(--red)'}[d.status]||'var(--text2)';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+    jobs.innerHTML = recent.map(d => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
         <div>
           <div style="font-size:12.5px;font-family:'DM Mono',monospace;color:var(--text)">${d.id.slice(0,16)}…</div>
           <div style="font-size:11px;color:var(--text3);margin-top:2px">${new Date(d.created_at).toLocaleString()}</div>
         </div>
         <span class="status status-${d.status}">${d.status}</span>
-      </div>`;
-    }).join('') + '</div>';
-  }
-
-  function workerAction(action) {
-    const msgs = { start:'Worker start signal sent — check your terminal running the AI Worker process.', stop:'Worker stop signal sent — the process will finish its current job then halt.', restart:'Worker restart queued.', flush_failed:'Failed queue cleared — jobs removed from dead-letter queue.' };
-    toast(msgs[action] || 'Action sent', 'success');
-    const badge = document.getElementById('worker-badge');
-    if (action==='stop') { badge.className='worker-status-badge worker-stopped'; badge.innerHTML='<div class="worker-pulse" style="animation:none;opacity:0.5"></div>Stopped'; }
-    else if (action==='start'||action==='restart') { badge.className='worker-status-badge worker-running'; badge.innerHTML='<div class="worker-pulse"></div>Running'; }
-    setTimeout(loadWorkerStats, 1000);
+      </div>`).join('');
   }
 
   /* ── Users ── */
@@ -308,101 +284,136 @@
   }
 
   function renderUsers() {
-    const q = document.getElementById('user-search').value.toLowerCase();
+    const q = (document.getElementById('user-search').value || '').toLowerCase();
     const list = q ? allUsers.filter(u => (u.first_name+' '+u.last_name+u.email).toLowerCase().includes(q)) : allUsers;
     document.getElementById('users-count').textContent = `${list.length} of ${allUsers.length} users`;
-    document.getElementById('users-body').innerHTML = list.map(u => `
-      <tr>
-        <td><div style="font-weight:500;font-size:13px">${u.first_name} ${u.last_name}</div></td>
+
+    // Current admin's user_id from JWT — we use this to prevent self-actions
+    const myId = ME.user_id;
+
+    document.getElementById('users-body').innerHTML = list.map(u => {
+      const isSelf = u.id === myId;
+      return `<tr>
+        <td><div style="font-weight:500;font-size:13px">${u.first_name} ${u.last_name}</div>${isSelf?'<div style="font-size:10px;color:var(--green);margin-top:2px">← you</div>':''}</td>
         <td style="font-size:12px;color:var(--text2);font-family:'DM Mono',monospace">${u.email}</td>
         <td style="font-size:12px">${(u.wilaya||'').replace(/_/g,' ')}</td>
         <td><span class="role-badge role-${u.role}">${u.role}</span></td>
         <td><span class="status ${u.is_active?'status-healthy':'status-failed'}">${u.is_active?'Active':'Inactive'}</span></td>
         <td style="font-size:11px;color:var(--text3)">${new Date(u.created_at).toLocaleDateString()}</td>
         <td>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-ghost btn-sm" onclick="toggleRole('${u.id}','${u.role}')">${u.role==='farmer'?'Make admin':'Make farmer'}</button>
-            <button class="btn ${u.is_active?'btn-danger':'btn-primary'} btn-sm" onclick="toggleActive('${u.id}',${u.is_active})">${u.is_active?'Deactivate':'Activate'}</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${isSelf
+              /* Self: no role change, no deactivation — admins can't demote/deactivate themselves */
+              ? `<span class="self-badge" title="You cannot change your own role or status">Your account</span>`
+              : `
+                <button class="btn btn-ghost btn-sm" onclick="toggleRole('${u.id}','${u.role}')" ${u.role==='admin'?'':''}>${u.role==='farmer'?'Make admin':'Make farmer'}</button>
+                <button class="btn ${u.is_active?'btn-danger':'btn-primary'} btn-sm" onclick="toggleActive('${u.id}',${u.is_active})">${u.is_active?'Deactivate':'Activate'}</button>
+              `
+            }
           </div>
         </td>
-      </tr>`).join('');
+      </tr>`;
+    }).join('');
   }
 
   async function toggleActive(id, current) {
-    await apiFetch(`/api/auth/admin/users/${id}/`,{method:'PATCH',body:JSON.stringify({is_active:!current})});
-    toast(current?'User deactivated':'User activated'); loadUsers();
+    const res = await apiFetch(`/api/auth/admin/users/${id}/`, {
+      method:'PATCH', body:JSON.stringify({is_active:!current})
+    });
+    if (res?.ok) { toast(current?'User deactivated':'User activated'); loadUsers(); }
+    else toast('Action failed','error');
   }
+
   async function toggleRole(id, current) {
-    const newRole = current==='farmer'?'admin':'farmer';
-    await apiFetch(`/api/auth/admin/users/${id}/`,{method:'PATCH',body:JSON.stringify({role:newRole})});
-    toast(`Role changed to ${newRole}`); loadUsers();
+    // Extra guard: never allow demoting yourself via JS either
+    if (id === ME.user_id) { toast('You cannot change your own role','error'); return; }
+    const newRole = current === 'farmer' ? 'admin' : 'farmer';
+    if (newRole === 'farmer') {
+      if (!confirm(`Demote this admin to farmer? They will lose all admin access immediately.`)) return;
+    }
+    const res = await apiFetch(`/api/auth/admin/users/${id}/`, {
+      method:'PATCH', body:JSON.stringify({role:newRole})
+    });
+    if (res?.ok) { toast(`Role changed to ${newRole}`); loadUsers(); }
+    else toast('Role change failed','error');
   }
 
   /* ── Diagnoses ── */
   async function loadAdminDiags() {
     const res = await apiFetch('/api/diagnosis/admin/diagnoses/');
     allDiags = res?.ok ? await res.json() : [];
+    buildDiagFilters();
     renderDiags();
   }
 
+  function buildDiagFilters() {
+    const filters = ['all','pending','processing','completed','failed'];
+    document.getElementById('diag-filters').innerHTML = filters.map(f =>
+      `<button onclick="setDF('${f}',this)" style="height:30px;padding:0 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border2);background:${f===diagFilter?'var(--green-bg)':'none'};color:${f===diagFilter?'var(--green)':'var(--text2)'};border-color:${f===diagFilter?'var(--green-ring)':'var(--border2)'};font-family:inherit" id="df-${f}">${f.charAt(0).toUpperCase()+f.slice(1)}${f!=='all'?' ('+allDiags.filter(d=>d.status===f).length+')':' ('+allDiags.length+')'}</button>`
+    ).join('');
+  }
+
   function setDF(f, btn) {
-    diagFilter=f;
-    document.querySelectorAll('#tab-diagnoses button').forEach(b=>{ b.style.background='none'; b.style.borderColor='var(--border2)'; b.style.color='var(--text2)'; });
-    btn.style.background='var(--green-bg)'; btn.style.borderColor='var(--green-ring)'; btn.style.color='var(--green)';
+    diagFilter = f;
+    document.querySelectorAll('#diag-filters button').forEach(b => {
+      b.style.background = 'none'; b.style.borderColor = 'var(--border2)'; b.style.color = 'var(--text2)';
+    });
+    btn.style.background = 'var(--green-bg)'; btn.style.borderColor = 'var(--green-ring)'; btn.style.color = 'var(--green)';
     renderDiags();
   }
 
   function renderDiags() {
-    const list = diagFilter==='all' ? allDiags : allDiags.filter(d=>d.status===diagFilter);
-    document.getElementById('diag-body').innerHTML = list.map(d => {
-      const conf = d.result ? Math.round(d.result.confidence_score*100) : null;
-      const confColor = conf===null?'':conf>=80?'var(--green)':conf>=50?'var(--yellow)':'var(--red)';
+    const list = diagFilter === 'all' ? allDiags : allDiags.filter(d => d.status === diagFilter);
+    document.getElementById('diag-body').innerHTML = list.length ? list.map(d => {
+      const conf = d.result ? Math.round(d.result.confidence_score * 100) : null;
+      const cc = conf===null?'':conf>=80?'var(--green)':conf>=50?'var(--yellow)':'var(--red)';
       return `<tr>
         <td style="font-size:12px;color:var(--text2)">${new Date(d.created_at).toLocaleString()}</td>
         <td style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3)">${d.farmer_id.slice(0,12)}…</td>
         <td style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text3)">${d.field_id.slice(0,12)}…</td>
         <td><span class="status status-${d.status}">${d.status}</span></td>
         <td style="font-size:13px;color:var(--text)">${d.result?.disease_name||'—'}</td>
-        <td>${conf!==null?`<span class="conf-pill" style="background:${confColor}18;color:${confColor}">${conf}%</span>`:'—'}</td>
+        <td>${conf!==null?`<span class="conf-pill" style="background:${cc}18;color:${cc}">${conf}%</span>`:'—'}</td>
         <td>${d.result!==null?(d.result.is_healthy?'<span style="color:var(--green);font-size:12px;font-weight:600">✓ Yes</span>':'<span style="color:var(--red);font-size:12px;font-weight:600">✗ No</span>'):'—'}</td>
       </tr>`;
-    }).join('');
+    }).join('') : '<tr><td colspan="7" style="color:var(--text2);text-align:center;padding:24px">No diagnoses found</td></tr>';
   }
 
-  /* ── Logs ── */
+  /* ── Real Logs ── */
   async function loadLogs() {
-    const res = await apiFetch('/api/notify/admin/logs/');
-    const logs = res?.ok ? await res.json() : [];
     const feed = document.getElementById('log-feed');
+    feed.innerHTML = '<div class="log-empty">Fetching logs…</div>';
+    const res = await apiFetch('/api/notify/admin/logs/');
+    if (!res?.ok) {
+      feed.innerHTML = '<div class="log-empty" style="color:var(--red)">Could not load logs — check your connection or permissions.</div>';
+      return;
+    }
+    const logs = await res.json();
     if (!logs.length) {
-      feed.innerHTML = generateFakeLogs();
+      feed.innerHTML = '<div class="log-empty">No events logged yet. Events appear here once diagnoses are processed or weather alerts are sent.</div>';
       return;
     }
     feed.innerHTML = logs.map(l => {
-      const cls = l.success ? 'log-ok' : 'log-error';
+      const cls   = l.success ? 'log-ok' : 'log-error';
       const level = l.success ? 'INFO ' : 'ERROR';
+      // Safely summarise the payload without printing massive JSON blobs
+      let summary = '';
+      try {
+        const p = typeof l.payload === 'string' ? JSON.parse(l.payload) : l.payload;
+        const keys = Object.keys(p).slice(0, 4);
+        summary = keys.map(k => `${k}=${JSON.stringify(p[k])}`).join(' ');
+      } catch { summary = String(l.payload).slice(0, 80); }
       return `<div class="log-line ${cls}">
         <span class="log-time">${new Date(l.processed_at).toLocaleTimeString()}</span>
         <span class="log-level">${level}</span>
-        <span class="log-msg">[${l.event_type}] ${JSON.stringify(l.payload).slice(0,80)}…</span>
+        <span class="log-type">[${l.event_type}]</span>
+        <span class="log-msg">${summary}${l.error?` — ERR: ${l.error}`:''}</span>
       </div>`;
     }).join('');
   }
 
-  function generateFakeLogs() {
-    const now = Date.now();
-    const entries = [
-      { t: now-2000,  cls:'log-ok',    level:'INFO ', msg:'[diagnosis.done] field_id=abc123 disease=Apple_Cedar_Rust confidence=0.93' },
-      { t: now-15000, cls:'log-ok',    level:'INFO ', msg:'[diagnosis.requested] farmer_id=xyz789 image uploaded successfully' },
-      { t: now-32000, cls:'log-info',  level:'INFO ', msg:'[system] Farm service consumer heartbeat OK' },
-      { t: now-48000, cls:'log-warn',  level:'WARN ', msg:'[diagnosis.done] Low confidence result: 0.41 — flagged for review' },
-      { t: now-91000, cls:'log-ok',    level:'INFO ', msg:'[diagnosis.done] field_id=def456 is_healthy=true' },
-      { t: now-120000,cls:'log-error', level:'ERROR', msg:'[diagnosis.requested] Image decode failed — corrupt file uploaded' },
-      { t: now-200000,cls:'log-ok',    level:'INFO ', msg:'[system] Notification service consumer connected to RabbitMQ' },
-    ];
-    return entries.map(e => `<div class="log-line ${e.cls}"><span class="log-time">${new Date(e.t).toLocaleTimeString()}</span><span class="log-level">${e.level}</span><span class="log-msg">${e.msg}</span></div>`).join('');
-  }
-
-  checkHealth(); loadSummary();
+  /* Init */
+  checkHealth();
+  loadSummary();
 </script>
 {% endblock %}

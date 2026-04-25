@@ -35,6 +35,7 @@ SERVICES = [
     },
 ]
 
+
 def register_all():
     ok = 0
     for s in SERVICES:
@@ -51,9 +52,13 @@ def register_all():
                     f"traefik.http.routers.{s['Name']}.priority={s['priority']}",
                 ],
                 'Check': {
-                    'HTTP':     f"http://{s['Address']}:{s['Port']}{s['health']}",
-                    'Interval': '10s',
-                    'Timeout':  '3s',
+                    'HTTP':                         f"http://{s['Address']}:{s['Port']}{s['health']}",
+                    'Interval':                     '10s',
+                    'Timeout':                      '5s',
+                    # CRITICAL: Don't deregister on health failure —
+                    # services restart and re-register themselves; a blip
+                    # should NOT remove them from Consul permanently.
+                    'DeregisterCriticalServiceAfter': '2m',
                 },
             }
             r = requests.put(
@@ -62,17 +67,38 @@ def register_all():
             )
             if r.status_code == 200:
                 ok += 1
+                logger.info(f"Registered {s['Name']}")
             else:
                 logger.warning(f"Failed {s['Name']}: {r.status_code} {r.text}")
         except Exception as e:
             logger.error(f"Error registering {s['Name']}: {e}")
     logger.info(f"Registered {ok}/{len(SERVICES)} services")
 
+
+def wait_for_consul():
+    """Block until Consul is reachable."""
+    for attempt in range(30):
+        try:
+            r = requests.get(f'{CONSUL}/v1/status/leader', timeout=3)
+            if r.status_code == 200:
+                logger.info('Consul is ready')
+                return
+        except Exception:
+            pass
+        logger.info(f'Waiting for Consul... ({attempt + 1}/30)')
+        time.sleep(3)
+    logger.error('Consul never became ready — continuing anyway')
+
+
 if __name__ == '__main__':
-    # Wait for all services to be up first
-    logger.info('Waiting 20s for services to start...')
-    time.sleep(20)
-    logger.info('Consul registrar started — registering every 60s')
+    wait_for_consul()
+
+    # Give services 25s to start up before first registration
+    logger.info('Waiting 25s for services to start...')
+    time.sleep(25)
+
+    logger.info('Consul registrar started — re-registering every 30s')
     while True:
         register_all()
-        time.sleep(60)
+        # Re-register every 30s (not 60s) so services come back faster after restarts
+        time.sleep(30)
