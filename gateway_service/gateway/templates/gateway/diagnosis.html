@@ -75,49 +75,56 @@
 {% block scripts %}
 <script>
   let fields=[], allDiags=[], histFilter='all';
+  let pollInterval = null;
+
   async function loadFields() {
     const res = await apiFetch('/api/farms/fields/');
     fields = res?.ok ? await res.json() : [];
     const sel = document.getElementById('d-field');
     sel.innerHTML = fields.length ? '<option value="">Select a field</option>'+fields.map(f=>`<option value="${f.id}">${f.name} (${f.crop_type})</option>`).join('') : '<option value="">No fields yet</option>';
   }
+
   async function loadDiagnoses() {
     const res = await apiFetch('/api/diagnosis/diagnoses/');
     allDiags = res?.ok ? await res.json() : [];
     renderHistory();
+    // Speed up polling to every 3s if any diagnosis is still processing
+    const hasProcessing = allDiags.some(d => d.status === 'pending' || d.status === 'processing');
+    clearInterval(pollInterval);
+    pollInterval = setInterval(loadDiagnoses, hasProcessing ? 3000 : 15000);
   }
+
   function setHF(f, btn) {
     histFilter=f;
     document.querySelectorAll('.hist-filter').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); renderHistory();
   }
+
   function renderHistory() {
     const list = histFilter==='all' ? allDiags : allDiags.filter(d=>d.status===histFilter);
     const el = document.getElementById('history-list');
     if (!list.length) { el.innerHTML='<div class="empty-state"><p>No diagnoses found</p></div>'; return; }
     el.innerHTML = list.map(d => {
-        const field = fields.find(f=>f.id===d.field_id);
-        const conf  = d.result ? Math.round(d.result.confidence_score*100) : null;
-        const dis   = d.result ? d.result.disease_name : d.status;
-        const col   = d.result?.is_healthy===false ? 'var(--red)' : d.result?.is_healthy ? 'var(--green)' : 'var(--text2)';
-
-        // Show spinner for pending/processing
-        const isProcessing = d.status === 'pending' || d.status === 'processing';
-        const icon = isProcessing
-            ? `<div class="diag-thumb"><span class="spinner" style="width:20px;height:20px;border-width:2px"></span></div>`
-            : `<div class="diag-thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
-
-        return `<div class="diag-row">
-            ${icon}
-            <div class="diag-info">
-                <div class="diag-disease" style="color:${col}">${dis}</div>
-                <div class="diag-meta">${field?field.name:'Unknown'} · ${new Date(d.created_at).toLocaleDateString()}</div>
-                <span class="status status-${d.status}" style="font-size:10px;margin-top:4px;display:inline-flex">${d.status}</span>
-            </div>
-            ${conf!==null ? `<div style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);flex-shrink:0">${conf}%</div>` : ''}
-        </div>`;
+      const field = fields.find(f=>f.id===d.field_id);
+      const conf  = d.result ? Math.round(d.result.confidence_score*100) : null;
+      const dis   = d.result ? d.result.disease_name : d.status;
+      const col   = d.result?.is_healthy===false ? 'var(--red)' : d.result?.is_healthy ? 'var(--green)' : 'var(--text2)';
+      const isProcessing = d.status === 'pending' || d.status === 'processing';
+      const icon = isProcessing
+        ? `<div class="diag-thumb"><span class="spinner" style="width:20px;height:20px;border-width:2px"></span></div>`
+        : `<div class="diag-thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
+      return `<div class="diag-row">
+        ${icon}
+        <div class="diag-info">
+          <div class="diag-disease" style="color:${col}">${dis}</div>
+          <div class="diag-meta">${field?field.name:'Unknown'} · ${new Date(d.created_at).toLocaleDateString()}</div>
+          <span class="status status-${d.status}" style="font-size:10px;margin-top:4px;display:inline-flex">${d.status}</span>
+        </div>
+        ${conf!==null ? `<div style="font-size:12px;font-family:'DM Mono',monospace;color:var(--text2);flex-shrink:0">${conf}%</div>` : ''}
+      </div>`;
     }).join('');
   }
+
   function previewImage(file) {
     if (!file) return;
     document.getElementById('drop-label').textContent = file.name;
@@ -126,10 +133,12 @@
     img.style.display='block';
     const r = new FileReader(); r.onload=e=>img.src=e.target.result; r.readAsDataURL(file);
   }
+
   function handleDrop(e) {
     e.preventDefault(); document.getElementById('drop-zone').classList.remove('dragover');
     const file = e.dataTransfer.files[0]; if (file) previewImage(file);
   }
+
   async function submitDiagnosis() {
     const fieldId = document.getElementById('d-field').value;
     const file = document.getElementById('d-image').files[0];
@@ -140,26 +149,19 @@
     const form = new FormData(); form.append('field_id',fieldId); form.append('image',file);
     const res = await apiFetch('/api/diagnosis/diagnoses/',{method:'POST',body:form});
     if (res?.ok) {
-      const d = await res.json(); toast('Diagnosis submitted!');
-      document.getElementById('d-image').value=''; document.getElementById('preview-img').style.display='none';
+      const d = await res.json(); toast('Diagnosis submitted — processing…');
+      document.getElementById('d-image').value='';
+      document.getElementById('preview-img').style.display='none';
       document.getElementById('drop-label').textContent='Click to upload or drag and drop';
-      if (d.result) { const rc=document.getElementById('result-card'); rc.className='result-card '+(d.result.is_healthy?'result-healthy':'result-disease'); rc.style.display='block'; document.getElementById('result-name').textContent=d.result.disease_name; const c=Math.round(d.result.confidence_score*100); document.getElementById('result-conf').textContent='Confidence: '+c+'%'; document.getElementById('result-bar').style.cssText='width:'+c+'%;background:'+(d.result.is_healthy?'var(--green)':'var(--red)'); }
-      loadDiagnoses();
-    } else { const e=await res.json(); toast(Object.values(e).flat().join(' '),'error'); }
+      document.getElementById('result-card').style.display='none';
+      // Immediately reload and switch to fast polling
+      await loadDiagnoses();
+    } else {
+      const e=await res.json(); toast(Object.values(e).flat().join(' '),'error');
+    }
     btn.disabled=false; btn.textContent='Analyse Crop';
   }
+
   loadFields().then(loadDiagnoses);
-  let pollInterval = setInterval(loadDiagnoses, 15000);
-
-async function loadDiagnoses() {
-    const res = await apiFetch('/api/diagnosis/diagnoses/');
-    allDiags = res?.ok ? await res.json() : [];
-    renderHistory();
-
-    // Speed up polling to every 3s if any diagnosis is still processing
-    const hasProcessing = allDiags.some(d => d.status === 'pending' || d.status === 'processing');
-    clearInterval(pollInterval);
-    pollInterval = setInterval(loadDiagnoses, hasProcessing ? 3000 : 15000);
-}
 </script>
 {% endblock %}
