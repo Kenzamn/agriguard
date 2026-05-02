@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 
-from .models import Diagnosis
+from .models import Diagnosis, DiagnosisResult
 from .serializers import DiagnosisSerializer, DiagnosisCreateSerializer
 from .auth import JWTAuthentication
 from .storage import save_diagnosis_image
@@ -93,3 +93,25 @@ class AdminDiagnosisListView(APIView):
             return Response({'detail': 'Only admins can access this endpoint.'}, status=status.HTTP_403_FORBIDDEN)
         diagnoses = Diagnosis.objects.all().order_by('-created_at').select_related('result')
         return Response(DiagnosisSerializer(diagnoses, many=True).data)
+    
+from rest_framework.permissions import AllowAny
+
+class InternalResultView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        diagnosis_id     = request.data.get("diagnosis_id")
+        disease_name     = request.data.get("disease_name")
+        confidence_score = request.data.get("confidence_score")
+        is_healthy       = request.data.get("is_healthy")
+
+        diagnosis = get_object_or_404(Diagnosis, pk=diagnosis_id)
+        DiagnosisResult.objects.create(
+            diagnosis        = diagnosis,
+            disease_name     = disease_name,
+            confidence_score = confidence_score,
+            is_healthy       = is_healthy,
+        )
+        diagnosis.status = "completed"
+        diagnosis.save(update_fields=["status"])
+        return Response({"detail": "ok"}, status=status.HTTP_201_CREATED)    

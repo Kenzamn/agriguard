@@ -320,3 +320,22 @@ services:
       auth-service:
         condition: service_healthy
     restart: unless-stopped
+
+  ai-worker:
+    build: ./AI_worker
+    container_name: agriguard-ai-worker
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      DIAGNOSIS_HOST: http://agriguard-diagnosis:8003
+      MODEL_PATH: /app/best_model.pth
+      MEDIA_ROOT: /app/media
+    volumes:
+      - diagnosis_media:/app/media   # same volume as diagnosis-service
+    networks:
+      - agriguard-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      diagnosis-service:
+        condition: service_started
+    restart: unless-stopped
